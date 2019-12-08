@@ -27,6 +27,7 @@ import javafx.animation.Timeline;
 import javafx.beans.binding.Bindings;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.geometry.Rectangle2D;
 import javafx.scene.Group;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
@@ -46,6 +47,7 @@ import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
 import javafx.stage.Modality;
+import javafx.stage.Screen;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import javafx.util.Duration;
@@ -144,6 +146,11 @@ public class GameController extends BaseController {
     private static Text tokens;
 
     /**
+     * The animation Timeline controlling the display of elapsed time
+     */
+    private static Timeline timeAnimation = new Timeline();
+
+    /**
      * Holds if the current animation of a user has been completed
      */
     private boolean animationCompleted = true;
@@ -177,11 +184,6 @@ public class GameController extends BaseController {
      * The current seconds passed, to be display to the user
      */
     private int seconds = 0;
-
-    /**
-     * The animation Timeline controlling the display of elapsed time
-     */
-    private Timeline timeAnimation;
 
 
     /**
@@ -239,35 +241,57 @@ public class GameController extends BaseController {
      */
     public void triggerAlert(String message, State state) {
         backgroundMusicPlayer.stop();
+        timeAnimation.pause();
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         User user = userViewModel.getUser();
         if (state == State.LEVEL_LOST) {
-            playSound("PlayerDeath");
-            user.resetInventory(level.getCurrentLevel());
-            String baseSavedFileDir = "./src/resources/saved-levels/" +
-                                      userViewModel.getUser().getUsername() + "-level-save" +
-                                      currentLevel + ".txt";
-            LevelSaver.delete(baseSavedFileDir);
-            alert.setHeaderText("LEVEL LOST");
-            alert.setContentText(message);
+            setDeathAlert(message, alert, user);
         } else if (state == State.LEVEL_WON) {
-            playSound("LevelWin");
-            Long finishTime = addNewFinishTime();
-            String time = getFormattedTime(finishTime);
-            alert.setContentText("You beat this level in " + time);
-            alert.setHeaderText(message);
-            user.setCurrentCell(null);
-            if (user.getHighestLevel() == currentLevel) {
-                if (currentLevel < 5) {
-                    user.incrementLevel();
-                }
-            }
-            user.resetInventory(currentLevel);
-            UserRepository.save(user);
+            setWinAlert(message, alert, user);
         }
         alert.showAndWait();
+
         Main.getPrimaryStage().setTitle("Main Menu");
         loadMainMenu(user);
+    }
+
+    /**
+     * The alert to be shown when the user beats the level
+     * @param message The message of the the alert
+     * @param alert The alert to be shown to the user
+     * @param user The current selected user
+     */
+    private void setWinAlert(String message, Alert alert, User user) {
+        playSound("LevelWin");
+        Long finishTime = addNewFinishTime();
+        String time = getFormattedTime(finishTime);
+        alert.setContentText("You beat this level in " + time);
+        alert.setHeaderText(message);
+        user.setCurrentCell(null);
+        if (user.getHighestLevel() == currentLevel) {
+            if (currentLevel < 5) {
+                user.incrementLevel();
+            }
+        }
+        user.resetInventory(currentLevel);
+        UserRepository.save(user);
+    }
+
+    /**
+     * The alert to be shown when a player dies
+     * @param message The message of the alert
+     * @param alert The alert object to be shown
+     * @param user The current selected user
+     */
+    private void setDeathAlert(String message, Alert alert, User user) {
+        playSound("PlayerDeath");
+        user.resetInventory(level.getCurrentLevel());
+        String baseSavedFileDir = "./src/resources/saved-levels/" +
+                                  userViewModel.getUser().getUsername() + "-level-save" +
+                                  currentLevel + ".txt";
+        LevelSaver.delete(baseSavedFileDir);
+        alert.setHeaderText("LEVEL LOST");
+        alert.setContentText(message);
     }
 
     /**
@@ -423,7 +447,6 @@ public class GameController extends BaseController {
      * @param timeDisplay The text in which the time will be display upon
      */
     private void animateTime(Text timeDisplay) {
-        timeAnimation = new Timeline();
         timeAnimation.setCycleCount(Animation.INDEFINITE);
         timeAnimation.getKeyFrames().add(new KeyFrame(Duration.seconds(1), e -> {
             seconds += 1;
@@ -477,9 +500,9 @@ public class GameController extends BaseController {
 
         clip.yProperty().bind(Bindings.createDoubleBinding(() ->
                         clampRange(
-                                userImageView.getY() - scene.getHeight() / 2,
-                                0, boardPane.getHeight() - scene.getHeight()),
-                                userImageView.yProperty(), scene.heightProperty()));
+                                userImageView.getY() - (scene.getHeight() + 64) / 2,
+                                0, boardPane.getHeight() - scene.getHeight() + 64),
+                userImageView.yProperty(), scene.heightProperty()));
 
         boardPane.setClip(clip);
         boardPane.translateXProperty().bind(clip.xProperty().multiply(-1));
@@ -743,18 +766,11 @@ public class GameController extends BaseController {
                         0, boardPane.getHeight() - userImageView.getFitHeight()));
 
 
-        if (userCurrentCell instanceof Element) {
-            if (((Element) userCurrentCell).getElementType().equals(ElementType.ICE)) {
-                animatedBasedOnPosition(userImageView, userCurrentCell);
-            } else {
-                animateUser(userImageView, x, y);
-            }
-        } else if (!(userCurrentCell instanceof Teleporter)) {
-            animateUser(userImageView, x, y);
-        } else {
+        if (userCurrentCell instanceof Teleporter) {
             userImageView.setVisible(false);
-            animatedBasedOnPosition(userImageView, userCurrentCell);
         }
+
+        animatedBasedOnPosition(userImageView, userCurrentCell);
 
         if (userCurrentCell instanceof Goal) {
             triggerAlert("Congratulations! You have completed Level " + currentLevel, State.LEVEL_WON);
@@ -785,33 +801,40 @@ public class GameController extends BaseController {
      * @param y The user's new Y position
      */
     private void checkForItemPickups(double x, double y) {
+        List<ItemViewModel> removed = new ArrayList<>();
         for (ItemViewModel itemViewModel : itemViewModels) {
             double iX = itemViewModel.getImageView().getX();
             double iY = itemViewModel.getImageView().getY();
 
-            if (iX == x && iY == y) {
+            boolean isDisabled = itemViewModel.getImageView().isDisabled();
+
+            if (iX == x && iY == y && !isDisabled) {
                 itemViewModel.getImageView().setVisible(false);
+                removed.add(itemViewModel);
                 if (itemViewModel.getItem() instanceof Key) {
                     if (!(((Key) itemViewModel.getItem()) == Key.TOKEN_KEY)) {
-                        //TODO:drt - handle
-                        double inventorySize = userViewModel.getUser().getInventory(currentLevel).size() - 1;
-                        ImageView ig = new ImageView();
-                        ig.setX(inventorySize * 64);
-                        ig.setY(0);
-                        ig.setImage(itemViewModel.getImage());
-                        inventoryItems.getChildren().add(ig);
+                        updateInventoryImages(itemViewModel);
                     }
                 } else {
-                    double inventorySize = userViewModel.getUser().getInventory(currentLevel).size() - 1;
-                    ImageView ig = new ImageView();
-                    ig.setX(inventorySize * 64);
-                    ig.setY(0);
-                    ig.setImage(itemViewModel.getImage());
-                    inventoryItems.getChildren().add(ig);
+                    updateInventoryImages(itemViewModel);
                 }
 
             }
         }
+        itemViewModels.removeAll(removed);
+    }
+
+    /**
+     * Update the inventory view with the newly acquired item
+     * @param itemViewModel The item's view model
+     */
+    private void updateInventoryImages(ItemViewModel itemViewModel) {
+        double inventorySize = userViewModel.getUser().getInventory(currentLevel).size() - 1;
+        ImageView ig = new ImageView();
+        ig.setX(inventorySize * 64);
+        ig.setY(0);
+        ig.setImage(itemViewModel.getImage());
+        inventoryItems.getChildren().add(ig);
     }
 
     /**
@@ -988,12 +1011,13 @@ public class GameController extends BaseController {
         Button resume = new Button("Resume");
         Button saveAndQuit = new Button("Save and Quit");
         pauseMenu.getChildren().addAll(resume, saveAndQuit);
-        pauseMenu.setAlignment(Pos.BASELINE_CENTER);
+        pauseMenu.setAlignment(Pos.CENTER);
 
         Stage popupStage = new Stage(StageStyle.TRANSPARENT);
         popupStage.initOwner(primaryStage);
         popupStage.initModality(Modality.APPLICATION_MODAL);
         popupStage.setScene(new Scene(pauseMenu, Color.TRANSPARENT));
+        setPauseMenuBounds(popupStage);
 
         resume.setOnAction(e -> {
             boardPane.setEffect(null);
@@ -1009,7 +1033,25 @@ public class GameController extends BaseController {
             loadMainMenu(userViewModel.getUser());
         });
 
-        popupStage.show();
+        popupStage.showAndWait();
+    }
+
+    /**
+     * Credit - https://stackoverflow.com/questions/40104688/javafx-center-child-stage-to-parent-stage
+     * Setting the pause menu bounds so it's always center of the game
+     * @param popupStage The popup stage being shown
+     */
+    private void setPauseMenuBounds(Stage popupStage) {
+        double centerXPosition = primaryStage.getX() + primaryStage.getWidth()/2d;
+        double centerYPosition = primaryStage.getY() + primaryStage.getHeight()/2d;
+
+        popupStage.setOnShowing(ev -> popupStage.hide());
+
+        popupStage.setOnShown(ev -> {
+            popupStage.setX(centerXPosition - popupStage.getWidth()/2d);
+            popupStage.setY(centerYPosition - popupStage.getHeight()/2d);
+            popupStage.show();
+        });
     }
 
     /**

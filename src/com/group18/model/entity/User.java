@@ -170,8 +170,11 @@ public class User extends Entity {
 
         Long[] levelArray = getQuickestTimesFor(level);
         if (levelArray[2] > time || levelArray[2] == 0){
+            levelArray[0] = levelArray[1];
+            levelArray[1] = levelArray[2];
             levelArray[2] = time;
         } else if (levelArray[1] > time || levelArray[1] == 0) {
+            levelArray[0] = levelArray[1];
             levelArray[1] = time;
         } else if (levelArray[0] > time || levelArray[0] == 0) {
             levelArray[0] = time;
