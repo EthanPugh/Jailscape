@@ -54,7 +54,7 @@ public abstract class AlertController extends BaseController {
 
     /**
      * Get the user associated with this Alert
-     * @return
+     * @return The current selected user
      */
     public User getUser() {
         return user;

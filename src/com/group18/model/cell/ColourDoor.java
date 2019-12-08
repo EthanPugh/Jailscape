@@ -5,6 +5,8 @@ import com.group18.model.Actionable;
 import com.group18.model.Colour;
 import com.group18.model.entity.Entity;
 import com.group18.model.entity.User;
+import com.group18.model.item.Collectable;
+import com.group18.model.item.Key;
 
 import java.awt.*;
 
@@ -48,6 +50,7 @@ public class ColourDoor extends Wall implements Door, Actionable {
 
             if (canOpen(user)) {
                 user.consumeKey(colour, getLevel().getCurrentLevel());
+                GameController.displayInventoryItems();
                 GameController.playSound("DoorOpen");
             }
         }

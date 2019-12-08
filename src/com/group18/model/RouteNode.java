@@ -55,8 +55,8 @@ public class RouteNode implements Comparable<RouteNode> {
 
     /**
      * Comparing estimated distances to each RouteNodes. This allows finding the
-     * shortest estimated distance from the start & targets nodes in a graph
-     * and hence finding the shortest path.
+     * shortest estimated distance from the start and targets nodes in a graphm
+     * hence finding the shortest path.
      * @param o The RouteNode we will be comparing too
      * @return An integer value suggesting if this node has a shorter,larger or equal estimated distance
      */

@@ -17,8 +17,8 @@ public class ItemViewModel extends ViewModel {
 
     /**
      * Creates a new view model
-     *
      * @param image The image associated with this view model
+     * @param item The item this view-model represents
      */
     public ItemViewModel(Image image, Collectable item) {
         super(image);

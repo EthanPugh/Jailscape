@@ -19,7 +19,7 @@ import static java.util.logging.Level.WARNING;
 
 /**
  * This class represents each level in Jailscape.
- * Will act as a link between the backend & frontend.
+ * Will act as a link between the backend and the frontend.
  *
  * @author danielturato
  */
@@ -59,6 +59,7 @@ public class Level {
     /**
      * Creates a new level
      * @param board The board for this level.
+     * @param level The level number
      */
     public Level(Cell[][] board, int level) {
         this.board = board;

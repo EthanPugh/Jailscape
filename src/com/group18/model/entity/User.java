@@ -1,5 +1,6 @@
 package com.group18.model.entity;
 
+import com.group18.controller.GameController;
 import com.group18.exception.InvalidLevelException;
 import com.group18.model.item.Collectable;
 import com.group18.model.Colour;
@@ -68,10 +69,12 @@ public class User extends Entity {
      */
     public void addToken() {
         tokens++;
+        GameController.setTokens();
     }
 
     /**
      * Returns a list of the inventory the user has earned.
+     * @param level The level of the inventory we desire
      * @return inventory
      */
     public List<Collectable> getInventory(int level) {
@@ -80,6 +83,7 @@ public class User extends Entity {
 
     /**
      * Adds to the inventory, each time a user earns a collectable item.
+     * @param level The level of the inventory we wish to add the item too
      * @param item The item that the User wants to collect
      */
     public void addItem(Collectable item, int level) {
@@ -89,6 +93,7 @@ public class User extends Entity {
     /**
      * Checks if this user has a key of a specific colour
      * @param colour The colour of key
+     * @param level The level of the inventory we wish to check
      * @return Boolean value suggesting if this user has a key of a specific colour
      */
     public boolean hasKey(Colour colour, int level) {
@@ -106,6 +111,7 @@ public class User extends Entity {
 
     /**
      * Remove a key of a specific colour from the user's inventory
+     * @param level The level inventory we wish to consume the key on
      * @param colour The colour of the key that needs to be consumed
      */
     public void consumeKey(Colour colour, int level) {
@@ -126,6 +132,7 @@ public class User extends Entity {
     /**
      * Checks if an item is of type Collectable.
      * @param i The item, the user needs to check upon
+     * @param level The level inventory we wish to check on
      * @return boolean value depending on whether it is collectable or not.
      */
     public boolean hasItem(Class<? extends Collectable> i, int level) {

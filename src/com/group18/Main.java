@@ -22,8 +22,8 @@ public class Main extends Application {
     public static Stage primaryStage;
 
     /**
-     * Used to start & initialize the game
-     * @param primaryStage
+     * Used to start and initialize the game
+     * @param primaryStage The primary stage of the game
      */
     @Override
     public void start(Stage primaryStage) {

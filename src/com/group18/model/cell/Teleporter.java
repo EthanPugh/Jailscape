@@ -49,7 +49,7 @@ public class Teleporter extends Ground implements Actionable {
 
     /**
      * Get this teleporter's partner cell
-     * @return
+     * @return This teleporter's partner
      */
     public Teleporter getPartner() {
         return partner;

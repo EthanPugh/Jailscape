@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * A graph holding all nodes & their connections for a specific level
+ * A graph holding all nodes and their connections for a specific level
  * This graph will specifically be used in calculating the shortest path
  * within the game.
  *

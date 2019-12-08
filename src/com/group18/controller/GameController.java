@@ -20,6 +20,7 @@ import com.group18.model.item.Key;
 import com.group18.viewmodel.EnemyViewModel;
 import com.group18.viewmodel.ItemViewModel;
 import com.group18.viewmodel.UserViewModel;
+import javafx.animation.Animation;
 import javafx.animation.KeyFrame;
 import javafx.animation.KeyValue;
 import javafx.animation.Timeline;
@@ -41,6 +42,9 @@ import javafx.scene.layout.VBox;
 import javafx.scene.media.MediaPlayer;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
+import javafx.scene.text.Font;
+import javafx.scene.text.FontWeight;
+import javafx.scene.text.Text;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
@@ -56,7 +60,7 @@ import java.util.logging.Logger;
 import static java.util.logging.Level.WARNING;
 
 /**
- * The controller for JailScape which controls the state & action
+ * The controller for JailScape which controls the state and action
  * for each possible playable level.
  *
  * @author frasergrandfield danielturato ethanpugh
@@ -95,17 +99,17 @@ public class GameController extends BaseController {
     private static Stage primaryStage;
 
     /**
-     * The initial epoch start time for this level
+     * The initial epoch start timeAnimation for this level
      */
     private static Instant startTime;
 
     /**
-     * The total elapsed pause time for this level
+     * The total elapsed pause timeAnimation for this level
      */
     private static Long totalPausedTime = 0L;
 
     /**
-     * The total saved time used if this level comes from a save
+     * The total saved timeAnimation used if this level comes from a save
      */
     private static Long totalSavedTime = 0L;
 
@@ -123,6 +127,21 @@ public class GameController extends BaseController {
      * The background music player for the game
      */
     private static MediaPlayer backgroundMusicPlayer;
+
+    /**
+     * The pane showing the users inventory
+     */
+    private static Pane inventoryPane;
+
+    /**
+     * The inventory item images being displayed to the user
+     */
+    private static Group inventoryItems;
+
+    /**
+     * Displays the number of tokens the user has
+     */
+    private static Text tokens;
 
     /**
      * Holds if the current animation of a user has been completed
@@ -153,6 +172,17 @@ public class GameController extends BaseController {
      * Used to determine if the user pressed a button
      */
     private boolean pressed = false;
+
+    /**
+     * The current seconds passed, to be display to the user
+     */
+    private int seconds = 0;
+
+    /**
+     * The animation Timeline controlling the display of elapsed time
+     */
+    private Timeline timeAnimation;
+
 
     /**
      * Default constructor, needed in various circumstances
@@ -214,6 +244,10 @@ public class GameController extends BaseController {
         if (state == State.LEVEL_LOST) {
             playSound("PlayerDeath");
             user.resetInventory(level.getCurrentLevel());
+            String baseSavedFileDir = "./src/resources/saved-levels/" +
+                                      userViewModel.getUser().getUsername() + "-level-save" +
+                                      currentLevel + ".txt";
+            LevelSaver.delete(baseSavedFileDir);
             alert.setHeaderText("LEVEL LOST");
             alert.setContentText(message);
         } else if (state == State.LEVEL_WON) {
@@ -254,11 +288,69 @@ public class GameController extends BaseController {
     }
 
     /**
-     * Set the total time this level received from a saved file
+     * Set the total timeAnimation this level received from a saved file
      * @param totalSavedTime The new total saved time
      */
     public static void setTotalSavedTime(Long totalSavedTime) {
         GameController.totalSavedTime = totalSavedTime;
+    }
+
+    /**
+     * Set the number of tokens being displayed
+     */
+    public static void setTokens() {
+        tokens.setText("Tokens: " + userViewModel.getUser().getTokens());
+    }
+
+    /**
+     * Display the user's current inventory items
+     */
+    public static void displayInventoryItems() {
+        User user = userViewModel.getUser();
+        List<Collectable> inventory = user.getInventory(currentLevel);
+        inventoryItems.getChildren().clear();
+        inventoryPane.getChildren().remove(inventoryItems);
+
+        for (int i = 0; i < inventory.size(); i++) {
+            Collectable item = inventory.get(i);
+            ImageView itemImage = new ImageView();
+            itemImage.setX(i * 64);
+
+            if (item instanceof ElementItem) {
+                switch ((ElementItem) item) {
+                    case ICE_SKATES:
+                        itemImage.setImage(new Image(ResourceRepository.getResource("IceSkates")));
+                        break;
+                    case FLIPPERS:
+                        itemImage.setImage(new Image(ResourceRepository.getResource("Flippers")));
+                        break;
+                    case FIRE_BOOTS:
+                        itemImage.setImage(new Image(ResourceRepository.getResource("FireBoots")));
+                        break;
+                    default:
+                        break;
+                }
+            } else {
+                switch ((Key) item) {
+                    case YELLOW_KEY:
+                        itemImage.setImage(new Image(ResourceRepository.getResource("Key-Yellow")));
+                        break;
+                    case GREEN_KEY:
+                        itemImage.setImage(new Image(ResourceRepository.getResource("Key-Green")));
+                        break;
+                    case BLUE_KEY:
+                        itemImage.setImage(new Image(ResourceRepository.getResource("Key-Blue")));
+                        break;
+                    case RED_KEY:
+                        itemImage.setImage(new Image(ResourceRepository.getResource("Key-Red")));
+                        break;
+                    default:
+                        break;
+                }
+            }
+            inventoryItems.getChildren().add(itemImage);
+        }
+        inventoryPane.getChildren().add(inventoryItems);
     }
 
     /**
@@ -267,9 +359,16 @@ public class GameController extends BaseController {
      */
     private void init() {
         createBoard();
+        createInventoryPane();
+        displayInventory();
 
-        Scene scene = new Scene(new BorderPane(boardPane),500,500);
-        restrictView(scene);
+        if (userViewModel.getUser().getInventory(currentLevel).size() > 0) {
+            displayInventoryItems();
+        } else {
+            inventoryPane.getChildren().add(inventoryItems);
+        }
+
+        Scene scene = setupDisplay();
 
         scene.setOnKeyPressed(e -> processKey(e.getCode()));
         scene.setOnKeyReleased(e -> pressed = false);
@@ -279,6 +378,85 @@ public class GameController extends BaseController {
         primaryStage.show();
         startTime = Instant.now();
         playSound("BackgroundMusic");
+    }
+
+    /**
+     * Setup the inventory & game display Scene
+     * @return The scene containing the inventory and game views
+     */
+    private Scene setupDisplay() {
+        tokens = new Text(409, 26, "Tokens: " + Integer.toString(userViewModel.getUser().getTokens()));
+        tokens.setFill(Color.GOLD);
+        String timeText = getStartingTimeDisplay();
+
+        Text timeDisplay = new Text(408, 52, timeText);
+        timeDisplay.setFill(Color.WHITE);
+        timeDisplay.setFont(Font.font("Verdana", FontWeight.BOLD, 20));
+        animateTime(timeDisplay);
+
+        BorderPane borderPane = new BorderPane();
+        borderPane.setCenter(boardPane);
+        inventoryPane.getChildren().addAll(timeDisplay, tokens);
+        borderPane.setTop(inventoryPane);
+        Scene scene = new Scene(borderPane,500,550);
+        restrictView(scene);
+        return scene;
+    }
+
+    /**
+     * Get the starting time to be displayed to the user
+     * @return The starting time to be displayed
+     */
+    private String getStartingTimeDisplay() {
+        String timeText = "00:00";
+        if (totalSavedTime != 0) {
+            seconds = (int) (long) totalSavedTime / 1000;;
+            int mins = seconds / 60;
+            int secs = seconds % 60;
+            timeText = String.format("%02d:%02d", mins, secs);
+        }
+        return timeText;
+    }
+
+    /**
+     * Animate the time being display to the user
+     * @param timeDisplay The text in which the time will be display upon
+     */
+    private void animateTime(Text timeDisplay) {
+        timeAnimation = new Timeline();
+        timeAnimation.setCycleCount(Animation.INDEFINITE);
+        timeAnimation.getKeyFrames().add(new KeyFrame(Duration.seconds(1), e -> {
+            seconds += 1;
+            int mins = seconds / 60;
+            int secs = seconds % 60;
+            timeDisplay.setText(String.format("%02d:%02d", mins, secs));
+        }));
+        timeAnimation.play();
+    }
+
+    /**
+     * Create the inventory pane
+     */
+    private void createInventoryPane() {
+        inventoryPane = new Pane();
+        inventoryItems = new Group();
+        inventoryPane.setStyle("-fx-background-color: grey; -fx-border-color: black");
+        inventoryPane.setMaxWidth(500);
+        inventoryPane.setPrefSize(100,64);
+    }
+
+    /**
+     * Display the inventory images
+     */
+    private void displayInventory() {
+        Group inventory = new Group();
+        for (int i = 0; i < 6; i++) {
+            ImageView iv = new ImageView(new Image("resources/assets/Item/WoodPlanks.png"));
+            iv.setX(i * 64);
+            inventory.getChildren().addAll(iv);
+        }
+
+        inventoryPane.getChildren().add(inventory);
     }
 
 
@@ -613,6 +791,25 @@ public class GameController extends BaseController {
 
             if (iX == x && iY == y) {
                 itemViewModel.getImageView().setVisible(false);
+                if (itemViewModel.getItem() instanceof Key) {
+                    if (!(((Key) itemViewModel.getItem()) == Key.TOKEN_KEY)) {
+                        //TODO:drt - handle
+                        double inventorySize = userViewModel.getUser().getInventory(currentLevel).size() - 1;
+                        ImageView ig = new ImageView();
+                        ig.setX(inventorySize * 64);
+                        ig.setY(0);
+                        ig.setImage(itemViewModel.getImage());
+                        inventoryItems.getChildren().add(ig);
+                    }
+                } else {
+                    double inventorySize = userViewModel.getUser().getInventory(currentLevel).size() - 1;
+                    ImageView ig = new ImageView();
+                    ig.setX(inventorySize * 64);
+                    ig.setY(0);
+                    ig.setImage(itemViewModel.getImage());
+                    inventoryItems.getChildren().add(ig);
+                }
+
             }
         }
     }
@@ -780,9 +977,10 @@ public class GameController extends BaseController {
     }
 
     /**
-     * Called every time the user wishes to pause the game
+     * Called every timeAnimation the user wishes to pause the game
      */
     private void pauseGame() {
+        timeAnimation.pause();
         Instant currentPauseTime = Instant.now();
         boardPane.setEffect(new GaussianBlur());
 
@@ -801,6 +999,7 @@ public class GameController extends BaseController {
             boardPane.setEffect(null);
             updateTotalPauseTime(currentPauseTime);
             popupStage.hide();
+            timeAnimation.play();
         });
 
         saveAndQuit.setOnAction(e -> {
@@ -814,8 +1013,8 @@ public class GameController extends BaseController {
     }
 
     /**
-     * Calculate the current elapsed time used for saves
-     * @return The calculated elapsed time up till now
+     * Calculate the current elapsed timeAnimation used for saves
+     * @return The calculated elapsed timeAnimation up till now
      */
     private Long calculateCurrentSavedTime() {
         Instant elapsed = Instant.now();
@@ -845,8 +1044,8 @@ public class GameController extends BaseController {
     }
 
     /**
-     * Updates the accumulated pause time
-     * @param pauseStart The time start of the current pause
+     * Updates the accumulated pause timeAnimation
+     * @param pauseStart The timeAnimation start of the current pause
      */
     private void updateTotalPauseTime(Instant pauseStart) {
         totalPausedTime += java.time.Duration.between(pauseStart, Instant.now()).toMillis();
@@ -879,10 +1078,10 @@ public class GameController extends BaseController {
 
 
     /**
-     * Used to formatted a time from milliseconds into minutes & seconds
+     * Used to formatted a timeAnimation from milliseconds into minutes & seconds
      * Credit - https://stackoverflow.com/questions/17624335/converting-milliseconds-to-minutes-and-seconds
-     * @param time The time to be formatted (ms)
-     * @return The formatted time
+     * @param time The timeAnimation to be formatted (ms)
+     * @return The formatted timeAnimation
      */
     private String getFormattedTime(Long time) {
         return String.format("%d minutes, %d seconds",
@@ -894,7 +1093,7 @@ public class GameController extends BaseController {
 
 
     /**
-     * Used to add a new level finish time to the user's score list.
+     * Used to add a new level finish timeAnimation to the user's score list.
      */
     private static Long addNewFinishTime() {
         User user = userViewModel.getUser();
